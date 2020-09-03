@@ -97,7 +97,6 @@ const play = () => {
 
         const hasAnimation = !!animation._ticks.length;
         if (hasAnimation) {
-          console.log("AN", mainReturn);
           callHandler = animation._ticks[0];
           requestAnimationFrame(() => {
             evalCode();
@@ -113,6 +112,7 @@ const play = () => {
       vm.dispose();
     } catch (e) {
       console.log("Interpreter failure", e);
+      playButton.disabled = false;
     }
   };
 
