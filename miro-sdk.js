@@ -1,14 +1,5 @@
 const context = `
 function context(...args) {
-  function filter(obj, paths) {
-    const result = {};
-    for (const path of paths) {
-      if (obj[path]) result[path] = obj[path];
-    }
-
-    return result;
-  }
-
   const miro = {
     _widgets: $WIDGETS,
     _changes: [],
@@ -19,6 +10,7 @@ function context(...args) {
       }
     }
   }
+
   miro.createWidget = function(shape) {
     const id = Math.random().toString().slice(2);
     miro._widgets[id] = { id, shape, };
@@ -54,4 +46,6 @@ function context(...args) {
     result,
   }
 }
+
+context($CALL_ARGS);
 `
