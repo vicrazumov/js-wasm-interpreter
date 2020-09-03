@@ -32,9 +32,13 @@ const customerCodeContainer = document.querySelector("#code");
 customerCodeContainer.value = example;
 
 const play = () => {
-  playButton.disabled = true;
-
+  ctx.fillStyle = "white";
+  ctx.fillRect(1, 0, canvasWidth - 1, canvasHeight - 1);
   const customerCode = customerCodeContainer.value;
+
+  if (!customerCode) return;
+
+  playButton.disabled = true;
   const code = context.replace("$CALLEE", customerCode);
 
   let callHandler = "main";
