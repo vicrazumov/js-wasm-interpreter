@@ -46,10 +46,14 @@ const play = () => {
   const miro = vm.newObject();
 
   const pointers = [];
+
+  // ADD "MIRO" NATIVE API
   vm.setProp(vm.global, 'miro', miro);
 
+  // ADD INTERIOR WIDGET STORAGE AND "getWidgets" - native getWidgets didn't work in the async case as memory pointers were automatically released by the next loop
   vm.evalCode('miro._widgets = {}; miro.getWidgets = () => Object.values(miro._widgets)');
 
+  // ADD "PRINT" NATIVE FUNCTION
   const print = vm.newFunction('log', (...args) => {
     const textArgs = args.map(arg => vm.dump(arg));
     console.log(...textArgs);
@@ -57,6 +61,7 @@ const play = () => {
   vm.setProp(vm.global, 'print', print);
   print.dispose();
 
+  // ADD "miro.createWidget" native function - creates a widget in the host (see the "widgets" object here) and a copy in the interior
   const createWidget = vm.newFunction('createWidget', (shapeHandle) => {
     const shape = vm.dump(shapeHandle);
     if (shape && shape.x && shape.y) {
@@ -91,6 +96,7 @@ const play = () => {
   vm.setProp(miro, 'createWidget', createWidget);
   createWidget.dispose();
 
+  // ADD "miro.editWidget" native function - edits a widget in the host (see the "widgets" object here) and a copy in the interior
   const editWidget = vm.newFunction('editWidget', (idHandle, newShapeHandle) => {
     const id = vm.getString(idHandle);
     const newShape = vm.dump(newShapeHandle);
@@ -105,6 +111,7 @@ const play = () => {
   vm.setProp(miro, 'editWidget', editWidget);
   editWidget.dispose();
 
+  // ADD "miro.removeWidget" native function - removes a widget in the host (see the "widgets" object here) and a copy in the interior
   const removeWidget = vm.newFunction('removeWidget', (idHandle) => {
     const id = vm.getString(idHandle);
     if (id && widgets[id]) {
@@ -115,6 +122,7 @@ const play = () => {
   vm.setProp(miro, 'removeWidget', removeWidget);
   removeWidget.dispose();
 
+  // ADD "animate" async native function - returns a promise, that always resolves. Next loop launched as a part of the "rAF" callback - see vm.executePendingJobs(1)
   const animate = vm.newFunction('animate', () => {
     requestAnimationFrame(() => {
       draw(widgets);
