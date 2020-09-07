@@ -115,20 +115,14 @@ const play = () => {
   vm.setProp(miro, 'removeWidget', removeWidget);
   removeWidget.dispose();
 
-  let checkAsyncTimeout;
   const animate = vm.newFunction('animate', () => {
-
-    clearTimeout(checkAsyncTimeout);
-    checkAsyncTimeout = setTimeout(() => {
-      if (!vm.hasPendingJob()) {
-        console.log('FINISHED ASYNC');
-        playButton.disabled = false;
-      }
-    }, 100);
-
     requestAnimationFrame(() => {
       draw(widgets);
       vm.unwrapResult(vm.executePendingJobs(1));
+      if (!vm.hasPendingJob()) {
+        playButton.disabled = false;
+        console.log('Async FINISHED');
+      }
     })
 
     const result = vm.unwrapResult(
@@ -156,11 +150,9 @@ const play = () => {
       } else {
         const result = vm.dump(evalResult.value);
 
-        if (vm.hasPendingJob()) {
-
-        } else {
-          console.log('FINISHED', result);
+        if (!vm.hasPendingJob()) {
           playButton.disabled = false;
+          console.log('FINISHED', result);
         }
 
         evalResult.value.dispose();
