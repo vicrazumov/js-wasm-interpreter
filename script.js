@@ -39,17 +39,23 @@ const play = () => {
   if (!customerCode) return;
 
   playButton.disabled = true;
-  const code = context.replace("$CALLEE", customerCode);
 
-  let callHandler = "main";
   let widgets = {};
-  const callArguments = [];
 
   const vm = quickJS.createVm();
   const miro = vm.newObject();
 
   const pointers = [];
   vm.setProp(vm.global, 'miro', miro);
+
+  vm.evalCode('miro._widgets = {}; miro.getWidgets = () => Object.values(miro._widgets)');
+
+  const print = vm.newFunction('log', (...args) => {
+    const textArgs = args.map(arg => vm.dump(arg));
+    console.log(...textArgs);
+  })
+  vm.setProp(vm.global, 'print', print);
+  print.dispose();
 
   const createWidget = vm.newFunction('createWidget', (shapeHandle) => {
     const shape = vm.dump(shapeHandle);
@@ -73,9 +79,10 @@ const play = () => {
       vm.setProp(widgetHandle, 'shape', newShapeHandle);
       pointers.push(newShapeHandle);
 
-      widgets[id] = { id, shape, idHandle, shapeHandle: newShapeHandle }
+      widgets[id] = { id, shape }
 
-      console.log('WIDGETS', widgets);
+      vm.evalCode(`miro._widgets[${id}] = { id: "${id}", shape: ${JSON.stringify(shape)} }`);
+
       return widgetHandle;
     } else {
       throw new Error('Wrong argument: shape');
@@ -88,17 +95,9 @@ const play = () => {
     const id = vm.getString(idHandle);
     const newShape = vm.dump(newShapeHandle);
     if (id && widgets[id] && newShape && newShape.x && newShape.y) {
-      const { shapeHandle } = widgets[id];
       widgets[id].shape.x = newShape.x;
       widgets[id].shape.y = newShape.y;
-      const xHandler = vm.newNumber(newShape.x);
-      const yHandler = vm.newNumber(newShape.y);
-      vm.setProp(shapeHandle, 'x', xHandler);
-      vm.setProp(shapeHandle, 'y', yHandler);
-      xHandler.dispose();
-      yHandler.dispose();
-
-      console.log('EDITED', id, widgets[id].shape.x, widgets[id].shape.y);
+      vm.evalCode(`miro._widgets[${id}].shape = ${JSON.stringify(newShape)}`)
     } else {
       throw new Error('Wrong arguments');
     }
@@ -109,85 +108,34 @@ const play = () => {
   const removeWidget = vm.newFunction('removeWidget', (idHandle) => {
     const id = vm.getString(idHandle);
     if (id && widgets[id]) {
-      const { shapeHandle, idHandle } = widgets[id];
-      shapeHandle.dispose();
-      idHandle.dispose();
+      vm.evalCode(`delete miro._widgets[${id}]`)
       delete widgets[id];
     }
   })
   vm.setProp(miro, 'removeWidget', removeWidget);
   removeWidget.dispose();
 
-  const getWidgets = vm.newFunction('getWidgets', () => {
-    const array = vm.newObject();
-    const widgetsArray = Object.values(widgets);
+  let checkAsyncTimeout;
+  const animate = vm.newFunction('animate', () => {
 
-    widgetsArray.forEach(({ idHandle, shapeHandle }, idx) => {
-      const widgetHandle = vm.newObject();
-      vm.setProp(widgetHandle, 'id', idHandle);
-      vm.setProp(widgetHandle, 'shape', shapeHandle);
-      vm.setProp(array, idx, widgetHandle);
+    clearTimeout(checkAsyncTimeout);
+    checkAsyncTimeout = setTimeout(() => {
+      if (!vm.hasPendingJob()) {
+        console.log('FINISHED ASYNC');
+        playButton.disabled = false;
+      }
+    }, 100);
+
+    requestAnimationFrame(() => {
+      draw(widgets);
+      vm.unwrapResult(vm.executePendingJobs(1));
     })
 
-    return array;
-  })
-  vm.setProp(miro, 'getWidgets', getWidgets);
-  getWidgets.dispose();
+    const result = vm.unwrapResult(
+      vm.evalCode(`(new Promise(resolve => resolve()))`)
+    )
 
-  function newDeferredHandle(vm) {
-    const deferred = vm.evalCode(`
-    result = {};
-    result.promise = new Promise((resolve, reject) => {
-      result.resolve = resolve
-      result.reject = reject
-    });
-    result;
-   `)
-    // should always succeed
-    return vm.unwrapResult(deferred)
-  }
-
-  const animationQueue = [];
-  let animationTimeout = null;
-  const queueAnimation = (params) => {
-    animationQueue.push(params);
-    clearTimeout(animationTimeout);
-    animationTimeout = setTimeout(runAnimation);
-  }
-
-  let lastTimestamp = new Date().getTime();
-  const runAnimation = () => {
-    const frame = animationQueue.shift();
-    if (frame) {
-      requestAnimationFrame(() => {
-        draw(frame);
-        const newTimestamp = new Date().getTime();
-        console.log('ANIMATED', newTimestamp - lastTimestamp, Object.values(frame).reduce((acc, next) => { acc.push(next.shape.x); return acc; }, []))
-        lastTimestamp = newTimestamp;
-        runAnimation();
-      })
-    }
-  }
-
-  const animate = vm.newFunction('animate', (handle) => {
-    // const deferredHandle = newDeferredHandle(vm)
-    // const dup = handle.dup();
-
-    const widgetsCopy = Object.entries(widgets).reduce((acc, [, { id, shape: { x, y } }]) => {
-      acc[id] = {
-        id,
-        shape: { x, y }
-      }
-
-      console.log('rAF', id, x, y)
-
-      return acc;
-    }, {});
-
-    queueAnimation(widgetsCopy);
-
-    // return quickjs promise
-    // return vm.getProp(deferredHandle, 'promise')
+    return result
   })
   vm.setProp(vm.global, 'animate', animate);
   // animate.dispose();
@@ -208,11 +156,16 @@ const play = () => {
       } else {
         const result = vm.dump(evalResult.value);
 
-        console.log('FINISHED', result);
+        if (vm.hasPendingJob()) {
+
+        } else {
+          console.log('FINISHED', result);
+          playButton.disabled = false;
+        }
 
         evalResult.value.dispose();
 
-        // draw(widgets);
+        draw(widgets);
       }
 
     } catch (e) {
